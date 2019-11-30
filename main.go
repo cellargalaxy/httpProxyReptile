@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,14 +27,17 @@ var timeout = 5 * time.Second
 var retry = 3
 var pageMax = 5
 
-var checkProxyMaxThread = 16
-var checkProxySignal = make(chan string)
+var checkProxyMaxThread = 128
+var checkProxyChan = make(chan string)
 
-var globalProxiesLock = make(chan int, 1)
+var globalProxiesLock sync.Mutex
 var globalProxies []string
 var globalProxiesMap = make(map[string]string)
 
 func init() {
+	for i := 0; i < checkProxyMaxThread; i++ {
+		go checkAndAddProxy()
+	}
 	loadGlobalProxies()
 }
 
@@ -73,33 +77,34 @@ func createResponseData(data interface{}, err error) interface{} {
 //----------------------------------------------------------------------------------------------------------------------
 
 func getProxy() string {
+	globalProxiesLock.Lock()
+	defer globalProxiesLock.Unlock()
 	proxy := ""
-	globalProxiesLock <- 1
 	if len(globalProxies) > 0 {
 		proxy = globalProxies[rand.Intn(len(globalProxies))]
 	}
-	<-globalProxiesLock
 	return proxy
 }
 
 func addProxy(proxy string) {
+	globalProxiesLock.Lock()
+	defer globalProxiesLock.Unlock()
 	if proxy == "" {
 		return
 	}
-	globalProxiesLock <- 1
 	if _, ok := globalProxiesMap[proxy]; ok {
 		return
 	}
 	globalProxiesMap[proxy] = proxy
 	globalProxies = append(globalProxies, proxy)
-	<-globalProxiesLock
 }
 
 func addProxies(proxies []string) {
+	globalProxiesLock.Lock()
+	defer globalProxiesLock.Unlock()
 	if proxies == nil || len(proxies) == 0 {
 		return
 	}
-	globalProxiesLock <- 1
 	for i := range proxies {
 		if _, ok := globalProxiesMap[proxies[i]]; ok {
 			continue
@@ -107,7 +112,6 @@ func addProxies(proxies []string) {
 		globalProxiesMap[proxies[i]] = proxies[i]
 		globalProxies = append(globalProxies, proxies[i])
 	}
-	<-globalProxiesLock
 }
 
 func loadGlobalProxies() error {
@@ -142,14 +146,14 @@ func addProxyByJson(jsonString string) error {
 }
 
 func saveGlobalProxies() error {
-	globalProxiesLock <- 1
+	globalProxiesLock.Lock()
+	defer globalProxiesLock.Unlock()
 	bytes, err := json.Marshal(globalProxies)
 	if err != nil {
 		log.WithFields(logrus.Fields{"err": err}).Error("序列化globalProxies失败")
 		return err
 	}
 	err = writeFileOrCreateIfNotExist(dataPath, bytes)
-	<-globalProxiesLock
 	return err
 }
 
@@ -224,23 +228,20 @@ func readFile(filePath string) ([]byte, error) {
 //----------------------------------------------------------------------------------------------------------------------
 
 func autoFlushProxy() {
-	for i := 0; i < checkProxyMaxThread; i++ {
-		go checkAndAddProxy()
-	}
 	for {
 		flushProxy()
 	}
 }
 
 func flushProxy() {
+	globalProxiesLock.Lock()
 	var proxies []string
-	globalProxiesLock <- 1
 	for i := range globalProxies {
 		proxies = append(proxies, strings.Split(globalProxies[i], "//")[1])
 	}
-	<-globalProxiesLock
 	globalProxies = []string{}
 	globalProxiesMap = make(map[string]string)
+	globalProxiesLock.Unlock()
 	checkProxies(proxies)
 
 	checkProxies(kuaidaili())
@@ -256,13 +257,13 @@ func flushProxy() {
 
 func checkProxies(proxies []string) {
 	for i := range proxies {
-		checkProxySignal <- proxies[i]
+		checkProxyChan <- proxies[i]
 	}
 }
 
 func checkAndAddProxy() {
 	for {
-		proxy := <-checkProxySignal
+		proxy := <-checkProxyChan
 		httpProxy := fmt.Sprintf("http://%s", proxy)
 		log.WithFields(logrus.Fields{"httpProxy": httpProxy}).Info("代理链接")
 		if checkProxy(httpProxy) {
