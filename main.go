@@ -24,7 +24,7 @@ var address = ":8080"
 var log = logrus.New()
 var timeout = 5 * time.Second
 var retry = 3
-var pageMax = 30
+var pageMax = 5
 
 var checkProxyMaxThread = 16
 var checkProxySignal = make(chan int, checkProxyMaxThread)
