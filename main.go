@@ -27,7 +27,7 @@ var retry = 3
 var pageMax = 5
 
 var checkProxyMaxThread = 16
-var checkProxySignal = make(chan int, checkProxyMaxThread)
+var checkProxySignal = make(chan string)
 
 var globalProxiesLock = make(chan int, 1)
 var globalProxies []string
@@ -224,6 +224,9 @@ func readFile(filePath string) ([]byte, error) {
 //----------------------------------------------------------------------------------------------------------------------
 
 func autoFlushProxy() {
+	for i := 0; i < checkProxyMaxThread; i++ {
+		go checkAndAddProxy()
+	}
 	for {
 		flushProxy()
 	}
@@ -253,34 +256,32 @@ func flushProxy() {
 
 func checkProxies(proxies []string) {
 	for i := range proxies {
-		checkProxySignal <- 1
-		go checkAndAddProxy(proxies[i])
+		checkProxySignal <- proxies[i]
 	}
 }
 
-func checkAndAddProxy(proxy string) {
-	httpProxy := fmt.Sprintf("http://%s", proxy)
-	log.WithFields(logrus.Fields{"httpProxy": httpProxy}).Info("代理链接")
-	if checkProxy(httpProxy) {
-		addProxy(httpProxy)
-		<-checkProxySignal
-		return
+func checkAndAddProxy() {
+	for {
+		proxy := <-checkProxySignal
+		httpProxy := fmt.Sprintf("http://%s", proxy)
+		log.WithFields(logrus.Fields{"httpProxy": httpProxy}).Info("代理链接")
+		if checkProxy(httpProxy) {
+			addProxy(httpProxy)
+			continue
+		}
+		socks5Proxy := fmt.Sprintf("socks5://%s", proxy)
+		log.WithFields(logrus.Fields{"socks5Proxy": socks5Proxy}).Info("代理链接")
+		if checkProxy(socks5Proxy) {
+			addProxy(httpProxy)
+			continue
+		}
+		httpsProxy := fmt.Sprintf("https://%s", proxy)
+		log.WithFields(logrus.Fields{"httpsProxy": httpsProxy}).Info("代理链接")
+		if checkProxy(httpsProxy) {
+			addProxy(httpProxy)
+			continue
+		}
 	}
-	socks5Proxy := fmt.Sprintf("socks5://%s", proxy)
-	log.WithFields(logrus.Fields{"socks5Proxy": socks5Proxy}).Info("代理链接")
-	if checkProxy(socks5Proxy) {
-		addProxy(httpProxy)
-		<-checkProxySignal
-		return
-	}
-	httpsProxy := fmt.Sprintf("https://%s", proxy)
-	log.WithFields(logrus.Fields{"httpsProxy": httpsProxy}).Info("代理链接")
-	if checkProxy(httpsProxy) {
-		addProxy(httpProxy)
-		<-checkProxySignal
-		return
-	}
-	<-checkProxySignal
 }
 
 func checkProxy(proxy string) bool {
