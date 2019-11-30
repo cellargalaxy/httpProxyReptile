@@ -25,7 +25,7 @@ var log = logrus.New()
 var timeout = 5 * time.Second
 var retry = 3
 
-var checkProxyMaxThread = 128
+var checkProxyMaxThread = 16
 var checkProxySignal = make(chan int, checkProxyMaxThread)
 
 var globalProxiesLock = make(chan int, 1)
@@ -350,7 +350,7 @@ func analysisKuaidaili(html string) ([]string, error) {
 
 func requestKuaidaili(page int) (string, error) {
 	url := fmt.Sprintf("https://www.kuaidaili.com/free/inha/%d/", page)
-	log.WithFields(logrus.Fields{"url": url}).Info("www.66ip.cn请求url")
+	log.WithFields(logrus.Fields{"url": url}).Info("www.kuaidaili.com请求url")
 	request := gorequest.New().Proxy(getProxy())
 	response, body, errs := request.Get(url).
 		Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36").
