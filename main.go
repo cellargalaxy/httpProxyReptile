@@ -24,6 +24,7 @@ var address = ":8080"
 var log = logrus.New()
 var timeout = 5 * time.Second
 var retry = 3
+var pageMax = 30
 
 var checkProxyMaxThread = 16
 var checkProxySignal = make(chan int, checkProxyMaxThread)
@@ -310,7 +311,7 @@ func checkProxy(proxy string) bool {
 //https://www.kuaidaili.com/free/inha/1/
 func kuaidaili() []string {
 	var proxyList []string
-	for page := 1; page < 100; page++ {
+	for page := 1; page < pageMax; page++ {
 		for i := 0; i < retry; i++ {
 			html, err := requestKuaidaili(page)
 			if err == nil {
@@ -372,7 +373,7 @@ func requestKuaidaili(page int) (string, error) {
 //http://www.66ip.cn/1.html
 func _66ip() []string {
 	var proxyList []string
-	for page := 1; page < 100; page++ {
+	for page := 1; page < pageMax; page++ {
 		for i := 0; i < retry; i++ {
 			html, err := request66ip(page)
 			if err == nil {
