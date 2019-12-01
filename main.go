@@ -15,19 +15,19 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 var dataPath = "data.json"
-var address = ":8080"
+var address = ":8989"
 var log = logrus.New()
 var timeout = 5 * time.Second
 var retry = 3
 var pageMax = 5
 
-var checkProxyMaxThread = 16
 var checkProxyChan = make(chan string)
 
 var globalProxiesLock sync.Mutex
@@ -35,7 +35,12 @@ var globalProxies []string
 var globalProxiesMap = make(map[string]string)
 
 func init() {
-	for i := 0; i < checkProxyMaxThread; i++ {
+	checkProxyMaxThreadCountString := os.Getenv("CHECK_PROXY_MAX_THREAD_COUNT")
+	checkProxyMaxThreadCount, err := strconv.Atoi(checkProxyMaxThreadCountString)
+	if err != nil {
+		checkProxyMaxThreadCount = 16
+	}
+	for i := 0; i < checkProxyMaxThreadCount; i++ {
 		go checkAndAddProxy()
 	}
 	loadGlobalProxies()
