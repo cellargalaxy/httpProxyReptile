@@ -1,11 +1,10 @@
-FROM golang as builder
-COPY . /root
-WORKDIR /root
+FROM golang AS builder
+WORKDIR /src
+COPY . .
 RUN go mod download
-RUN go build -o proxyReptile main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /src/proxyReptile
 
 FROM alpine
 RUN apk --no-cache add ca-certificates
-COPY --from=builder /root/proxyReptile /
-RUN chmod +x /proxyReptile
-ENTRYPOINT ["/proxyReptile"]
+COPY --from=builder /src/proxyReptile /proxyReptile
+CMD ["/proxyReptile"]
